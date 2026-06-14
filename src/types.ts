@@ -6,7 +6,9 @@
 export interface Perfume {
   id: string; // ex) "perfume_01"
   brand: string; // 브랜드 명 (샤넬, 딥티크 등)
+  brandKor?: string; // 한글 브랜드명
   name: string; // 향수 이름 (1957, 탐다오 등)
+  nameKor?: string; // 한글 제품명
   scentFamily: string[]; // 향조 (Woody, Floral, Citrus, Musk, Powdery, Amber 등)
   topNotes: string[];
   middleNotes: string[];

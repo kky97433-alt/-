@@ -14,6 +14,19 @@ export default function App() {
   const [myPerfumes, setMyPerfumes] = useState<Perfume[]>([]);
   const [favorites, setFavorites] = useState<FavoriteLayering[]>([]);
   const [logs, setLogs] = useState<LayeringLog[]>([]);
+  const [catalog, setCatalog] = useState<Perfume[]>(MASTER_PERFUMES);
+
+  const fetchCatalog = async () => {
+    try {
+      const res = await fetch("/api/perfumes");
+      if (res.ok) {
+        const data = await res.json();
+        setCatalog(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch perfume catalog from server:", e);
+    }
+  };
 
   useEffect(() => {
     // 1-1. Initialize My Dressroom
@@ -50,6 +63,9 @@ export default function App() {
         setLogs([]);
       }
     }
+
+    // Fetch master catalog from server DB
+    fetchCatalog();
   }, []);
 
   const setMyPerfumesFromDefaults = () => {
@@ -118,8 +134,8 @@ export default function App() {
     let totalFamilies = 0;
 
     favorites.forEach(f => {
-      const p1 = MASTER_PERFUMES.find(p => p.id === f.perfumeId1);
-      const p2 = MASTER_PERFUMES.find(p => p.id === f.perfumeId2);
+      const p1 = catalog.find(p => p.id === f.perfumeId1);
+      const p2 = catalog.find(p => p.id === f.perfumeId2);
 
       [p1, p2].forEach(p => {
         if (!p) return;
@@ -299,8 +315,10 @@ export default function App() {
             >
               <MyWardrobeTab
                 myPerfumes={myPerfumes}
+                catalog={catalog}
                 onAddPerfume={addPerfumeToLibrary}
                 onRemovePerfume={removePerfumeFromLibrary}
+                onRefreshCatalog={fetchCatalog}
               />
             </motion.div>
           )}
@@ -381,8 +399,8 @@ export default function App() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {favorites.map(fav => {
-                      const p1 = MASTER_PERFUMES.find(p => p.id === fav.perfumeId1);
-                      const p2 = MASTER_PERFUMES.find(p => p.id === fav.perfumeId2);
+                      const p1 = catalog.find(p => p.id === fav.perfumeId1);
+                      const p2 = catalog.find(p => p.id === fav.perfumeId2);
 
                       return (
                         <div

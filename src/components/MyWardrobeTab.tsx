@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { Plus, Search, Trash, Sparkles } from "lucide-react";
 import { Perfume } from "../types";
-import { MASTER_PERFUMES } from "../data";
 
 interface MyWardrobeTabProps {
   myPerfumes: Perfume[];
+  catalog: Perfume[];
   onAddPerfume: (p: Perfume) => void;
   onRemovePerfume: (pId: string) => void;
+  onRefreshCatalog: () => void;
 }
 
 // Beautiful minimalist perfume bottle silhouette vector helper
@@ -30,14 +31,24 @@ const PerfumeBottleIcon = ({ color = "#2D4A3E" }: { color?: string }) => (
 
 export default function MyWardrobeTab({
   myPerfumes,
+  catalog,
   onAddPerfume,
-  onRemovePerfume
+  onRemovePerfume,
+  onRefreshCatalog
 }: MyWardrobeTabProps) {
   const [searchCatalogQuery, setSearchCatalogQuery] = useState("");
 
-  const filteredCatalog = MASTER_PERFUMES.filter(p => {
+  // AI Auto-Registration States
+  const [loadingAi, setLoadingAi] = useState(false);
+  const [aiBrand, setAiBrand] = useState("");
+  const [aiName, setAiName] = useState("");
+  const [aiError, setAiError] = useState("");
+  const [aiSuccessMessage, setAiSuccessMessage] = useState("");
+
+  // Filter Catalog using the state-driven dynamically populated catalog
+  const filteredCatalog = catalog.filter(p => {
     const isAlreadyOwned = myPerfumes.some(owned => owned.id === p.id);
-    const searchString = `${p.brand} ${p.name} ${p.scentFamily.join(" ")}`.toLowerCase();
+    const searchString = `${p.brand} ${p.brandKor || ""} ${p.name} ${p.nameKor || ""} ${p.scentFamily.join(" ")}`.toLowerCase();
     return !isAlreadyOwned && searchString.includes(searchCatalogQuery.toLowerCase());
   });
 
@@ -46,6 +57,59 @@ export default function MyWardrobeTab({
     if (searchInput) {
       searchInput.scrollIntoView({ behavior: "smooth", block: "center" });
       searchInput.focus();
+    }
+  };
+
+  const handleAiRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiName.trim()) {
+      setAiError("향수 이름을 입력해 주세요.");
+      return;
+    }
+
+    setLoadingAi(true);
+    setAiError("");
+    setAiSuccessMessage("");
+
+    try {
+      const res = await fetch("/api/perfumes/search-or-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brand: aiBrand,
+          name: aiName,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("서버 연동에 실패했습니다.");
+      }
+
+      const data = await res.json();
+      if (data.perfume) {
+        const newPerfume = data.perfume;
+        
+        // 1. Refresh global catalog state in client
+        await onRefreshCatalog();
+
+        // 2. Automatically add newly generated perfume to library/wardrobe
+        onAddPerfume(newPerfume);
+
+        // 3. Reset form and provide exquisite success feedback
+        setAiBrand("");
+        setAiName("");
+        setAiSuccessMessage(
+          `✨ [${newPerfume.brandKor || newPerfume.brand}] ${newPerfume.nameKor || newPerfume.name} 향수가 마스터 DB에 실시간 등록 및 나의 옷장에 추가되었습니다!`
+        );
+        setTimeout(() => setAiSuccessMessage(""), 7000);
+      } else {
+        setAiError("추가 과정에서 수집된 향 정보를 가져오지 못했습니다. 다시 시도해 주세요.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAiError("실시간 AI 수집 중 타임아웃 또는 서버 에러가 발생했습니다. 잠시 후 재시도해 주세요.");
+    } finally {
+      setLoadingAi(false);
     }
   };
 
@@ -64,7 +128,7 @@ export default function MyWardrobeTab({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Hand: Wardrobe Glass Dressroom Area (Grid of owned bottles) - 7 Columns for better beauty list spacing */}
+        {/* Left Hand: Wardrobe Glass Dressroom Area (Grid of owned bottles) */}
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-white border border-stone-200/60 p-6 rounded-2xl shadow-xs space-y-5">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3.5">
@@ -102,49 +166,56 @@ export default function MyWardrobeTab({
             ) : (
               /* Beautiful Bottle Card Grid as requested */
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {myPerfumes.map(per => (
-                  <div
-                    key={per.id}
-                    className="bg-white border border-stone-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between relative group"
-                  >
-                    {/* Delete button from wardrobe list */}
-                    <button
-                      onClick={() => onRemovePerfume(per.id)}
-                      className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-white hover:bg-red-50 text-stone-400 hover:text-red-650 transition-colors cursor-pointer shrink-0 border border-stone-100 z-10"
-                      title="내 옷장에서 삭제하기"
+                {myPerfumes.map(per => {
+                  const displayBrand = per.brandKor ? `${per.brandKor} (${per.brand})` : per.brand;
+                  const displayName = per.nameKor ? per.nameKor : per.name;
+                  return (
+                    <div
+                      key={per.id}
+                      className="bg-white border border-stone-200/80 p-4 rounded-2xl shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between relative group"
                     >
-                      <Trash className="w-3.5 h-3.5" />
-                    </button>
+                      {/* Delete button from wardrobe list */}
+                      <button
+                        onClick={() => onRemovePerfume(per.id)}
+                        className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-white hover:bg-red-50 text-stone-400 hover:text-red-650 transition-colors cursor-pointer shrink-0 border border-stone-100 z-10"
+                        title="내 옷장에서 삭제하기"
+                      >
+                        <Trash className="w-3.5 h-3.5" />
+                      </button>
 
-                    {/* Bottle Illustration Box */}
-                    <div className="py-4 bg-brand-bg/50 rounded-xl mb-3 flex items-center justify-center transition-colors group-hover:bg-brand-bg">
-                      <PerfumeBottleIcon color="#2D4A3E" />
-                    </div>
+                      {/* Bottle Illustration Box */}
+                      <div className="py-4 bg-brand-bg/50 rounded-xl mb-3 flex items-center justify-center transition-colors group-hover:bg-brand-bg">
+                        <PerfumeBottleIcon color="#2D4A3E" />
+                      </div>
 
-                    {/* Meta information */}
-                    <div className="space-y-1 min-w-0 text-center">
-                      <span className="text-[10px] text-brand-sub font-bold block uppercase tracking-wider">{per.brand}</span>
-                      <h4 className="text-xs font-bold text-brand-text truncate px-1" title={per.name}>
-                        {per.name}
-                      </h4>
-                      {/* Family Badges */}
-                      <div className="flex flex-wrap justify-center gap-1 pt-1.5 opacity-80">
-                        {per.scentFamily.slice(0, 2).map((fam, idx) => (
-                          <span key={idx} className="text-[8px] font-bold px-1 py-0.2 bg-stone-100 text-stone-600 rounded">
-                            {fam}
-                          </span>
-                        ))}
+                      {/* Meta information */}
+                      <div className="space-y-1 min-w-0 text-center">
+                        <span className="text-[9px] text-brand-sub font-bold block uppercase tracking-wider truncate mb-0.5" title={displayBrand}>
+                          {displayBrand}
+                        </span>
+                        <h4 className="text-xs font-bold text-brand-text truncate px-1" title={`${per.brand} ${per.name}`}>
+                          {displayName}
+                        </h4>
+                        {/* Family Badges */}
+                        <div className="flex flex-wrap justify-center gap-1 pt-1.5 opacity-80">
+                          {per.scentFamily.slice(0, 2).map((fam, idx) => (
+                            <span key={idx} className="text-[8px] font-bold px-1.5 py-0.5 bg-stone-150 text-stone-600 rounded">
+                              {fam}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Hand: Full Catalog Library list (5 columns for beautiful bento box visual layout) */}
+        {/* Right Hand: Full Catalog Library list + AI Auto-Registration Wizard */}
         <div className="lg:col-span-5 space-y-6">
+          {/* Catalog list card */}
           <div className="bg-white border border-stone-200/60 p-6 rounded-2xl shadow-xs space-y-5">
             <div className="space-y-1.5">
               <h3 className="text-sm font-bold tracking-wide text-brand-text font-serif">전체 향수 도감</h3>
@@ -160,39 +231,124 @@ export default function MyWardrobeTab({
                 type="text"
                 value={searchCatalogQuery}
                 onChange={(e) => setSearchCatalogQuery(e.target.value)}
-                placeholder="브랜드 또는 향수 이름 검색..."
+                placeholder="브랜드 또는 향수 명칭 검색..."
                 className="w-full bg-brand-bg/50 border border-stone-200 rounded-xl pl-10 pr-3.5 py-3 text-stone-850 text-xs focus:outline-none focus:border-brand-point focus:bg-white transition-all font-sans"
               />
             </div>
 
-            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
               {filteredCatalog.length === 0 ? (
                 <div className="p-8 text-center text-brand-sub border border-dashed border-stone-150 rounded-2xl">
-                  <p className="text-xs font-medium">일치하는 향수가 더 없습니다.</p>
-                  <p className="text-[10px] text-stone-400 mt-1">이미 모두 추가하셨거나 다른 키워드로 기재해 주세요.</p>
+                  <p className="text-xs font-medium">일치하는 미보유 향수가 없습니다.</p>
+                  <p className="text-[10px] text-stone-400 mt-1">이미 모두 추가하셨거나 신제품/비메이저 품목일 수 있습니다.</p>
                 </div>
               ) : (
-                filteredCatalog.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      onAddPerfume(p);
-                      setSearchCatalogQuery("");
-                    }}
-                    className="w-full text-left flex items-center justify-between p-3.5 rounded-xl bg-brand-bg/25 hover:bg-brand-bg/75 border border-stone-150 hover:border-brand-sub shadow-2xs transition-all duration-200 cursor-pointer group"
-                  >
-                    <div className="min-w-0 pr-1.5">
-                      <span className="text-[9px] text-brand-point block leading-none font-bold uppercase tracking-wider mb-1">{p.brand}</span>
-                      <span className="text-xs font-bold text-brand-text truncate block">{p.name}</span>
-                      <span className="text-[10px] text-brand-sub block mt-0.5 font-sans truncate">({p.scentFamily.join(", ")})</span>
-                    </div>
-                    <span className="p-2 rounded-lg bg-white text-brand-sub group-hover:text-white group-hover:bg-brand-point transition-all border border-stone-200 pointer-events-none self-center shrink-0">
-                      <Plus className="w-4 h-4" />
-                    </span>
-                  </button>
-                ))
+                filteredCatalog.map(p => {
+                  const displayBrand = p.brandKor ? `${p.brandKor} (${p.brand})` : p.brand;
+                  const displayName = p.nameKor ? p.nameKor : p.name;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        onAddPerfume(p);
+                        setSearchCatalogQuery("");
+                      }}
+                      className="w-full text-left flex items-center justify-between p-3.5 rounded-xl bg-brand-bg/25 hover:bg-brand-bg/75 border border-stone-150 hover:border-brand-sub shadow-2xs transition-all duration-200 cursor-pointer group"
+                    >
+                      <div className="min-w-0 pr-1.5">
+                        <span className="text-[8px] text-brand-point block leading-none font-bold uppercase tracking-wider mb-1 truncate">{displayBrand}</span>
+                        <span className="text-xs font-bold text-brand-text truncate block">{displayName}</span>
+                        <span className="text-[10px] text-brand-sub block mt-0.5 font-sans truncate">({p.scentFamily.join(", ")})</span>
+                      </div>
+                      <span className="p-2 rounded-lg bg-white text-brand-sub group-hover:text-white group-hover:bg-brand-point transition-all border border-stone-200 pointer-events-none self-center shrink-0">
+                        <Plus className="w-4 h-4" />
+                      </span>
+                    </button>
+                  );
+                })
               )}
             </div>
+          </div>
+
+          {/* AI Auto-Registration Wizard Card as specified in requirement 3 (Most Important!) */}
+          <div className="bg-stone-50 border border-stone-250/80 p-5 rounded-2xl shadow-xs space-y-4">
+            <div className="flex items-center gap-2 pb-1 border-b border-stone-200">
+              <Sparkles className="w-4 h-4 text-[#C19A5B] animate-pulse" />
+              <h4 className="text-xs font-bold text-[#1A1A1A] font-serif uppercase tracking-wider">
+                원하는 향수가 도감에 없나요? (AI 실시간 등록)
+              </h4>
+            </div>
+
+            <p className="text-[11px] text-stone-600 leading-normal">
+              찾으시는 특이 하우스 향수나 방금 갓 발매된 신상 향수가 도감에 없을 때, 브랜드명과 이름만 입력해주시면 
+              <strong> 실시간 AI 검색 시스템(Web Grounding)</strong>이 작용하여 올바른 탑/미들/베이스 노트 정보를 수집해 
+              마스터 DB에 영구 등록하고 즉시 옷장에 보관합니다.
+            </p>
+
+            {aiSuccessMessage && (
+              <div className="bg-emerald-50 border border-emerald-250 p-3 rounded-lg text-[11px] text-emerald-800 leading-relaxed font-semibold">
+                {aiSuccessMessage}
+              </div>
+            )}
+
+            {aiError && (
+              <div className="bg-red-55 border border-red-200 p-2.5 rounded-lg text-[10px] text-red-650 leading-relaxed font-semibold">
+                ⚠️ {aiError}
+              </div>
+            )}
+
+            <form onSubmit={handleAiRegister} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-stone-500 uppercase tracking-wider">브랜드명 (옵션)</label>
+                  <input
+                    type="text"
+                    value={aiBrand}
+                    onChange={(e) => setAiBrand(e.target.value)}
+                    placeholder="예: Tom Ford"
+                    disabled={loadingAi}
+                    className="w-full bg-white border border-stone-200 rounded-lg p-2.5 text-[11px] focus:outline-none focus:border-brand-point transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-stone-500 uppercase tracking-wider">향수명 (필수)</label>
+                  <input
+                    type="text"
+                    value={aiName}
+                    onChange={(e) => setAiName(e.target.value)}
+                    placeholder="예: Soliel Blanc"
+                    disabled={loadingAi}
+                    required
+                    className="w-full bg-white border border-stone-200 rounded-lg p-2.5 text-[11px] focus:outline-none focus:border-brand-point transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loadingAi || !aiName.trim()}
+                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5 ${
+                  loadingAi 
+                    ? "bg-stone-400 cursor-not-allowed" 
+                    : "bg-[#2D4A3E] hover:bg-[#1E332A] cursor-pointer"
+                }`}
+              >
+                {loadingAi ? (
+                  <>
+                    <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>AI 웹 검색 수집 및 DB 자동 등록 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>실시간 향수 자동 확장 및 내 컬렉션 담기</span>
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       </div>
