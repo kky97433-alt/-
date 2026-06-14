@@ -1,0 +1,6 @@
+{
+  "name": "ScentWeave",
+  "description": "개인 맞춤형 향수 레이어링 조합 검색 및 AI TPO 추천 플랫폼",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
