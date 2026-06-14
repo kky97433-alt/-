@@ -40,7 +40,20 @@ const BRANDS = [
   "CREED",
   "TOM FORD",
   "MAISON MARGIELA",
-  "PENHALIGONS"
+  "PENHALIGONS",
+  "HERMES",
+  "GUERLAIN",
+  "DIOR",
+  "YVES SAINT LAURENT",
+  "PRADA",
+  "VERSACE",
+  "GUCCI",
+  "BVLGARI",
+  "KILIAN",
+  "FREDERIC MALLE",
+  "ACQUA DI PARMA",
+  "AMOUAGE",
+  "SERGE LUTENS"
 ];
 
 export default function MyWardrobeTab({
@@ -66,26 +79,68 @@ export default function MyWardrobeTab({
     const isAlreadyOwned = myPerfumes.some(owned => owned.id === p.id);
     if (isAlreadyOwned) return false;
 
+    const normalize = (str: string) => str.toLowerCase().replace(/[\s'-]/g, "");
+
     // Brand Filter check
     if (selectedBrand !== "전체") {
       let match = false;
-      const normalize = (str: string) => str.toLowerCase().replace(/[\s']/g, "");
       const brandNormal = normalize(p.brand);
+      const selectedNormal = normalize(selectedBrand);
 
-      if (selectedBrand === "PENHALIGONS" && brandNormal.includes("penhaligon")) {
+      if (selectedNormal === "penhaligons" && brandNormal.includes("penhaligon")) {
         match = true;
-      } else if (selectedBrand === "JO MALONE" && brandNormal.includes("jomalone")) {
+      } else if (selectedNormal === "jomalone" && brandNormal.includes("jomalone")) {
         match = true;
-      } else if (selectedBrand === "MAISON MARGIELA" && brandNormal.includes("margiela")) {
+      } else if (selectedNormal === "maisonmargiela" && brandNormal.includes("margiela")) {
         match = true;
-      } else if (brandNormal === normalize(selectedBrand)) {
+      } else if (brandNormal.includes(selectedNormal) || selectedNormal.includes(brandNormal)) {
         match = true;
       }
       if (!match) return false;
     }
 
+    const query = searchCatalogQuery.toLowerCase().trim();
+    if (!query) return true;
+
+    // Language Mapping Layer: Map Korean brand/keyword terms to corresponding English terms for robust cross-language search
+    const korMap: Record<string, string> = {
+      "샤넬": "chanel",
+      "딥티크": "diptyque", "디프티크": "diptyque",
+      "바이레도": "byredo",
+      "이솝": "aesop", "에이솝": "aesop",
+      "르라보": "le labo",
+      "조말론": "jo malone",
+      "크리드": "creed",
+      "톰포드": "tom ford", "톰 포드": "tom ford",
+      "메종마르지엘라": "maison margiela", "마르지엘라": "maison margiela", "메종 마르지엘라": "maison margiela",
+      "펜할리곤스": "penhaligon", "펜할리곤": "penhaligon",
+      "에르메스": "hermes", "헤르메스": "hermes",
+      "겔랑": "guerlain",
+      "디올": "dior",
+      "입생로랑": "yves saint laurent", "입생": "yves saint laurent",
+      "프라다": "prada",
+      "베르사체": "versace",
+      "구찌": "gucci",
+      "불가리": "bvlgari",
+      "킬리안": "kilian",
+      "프레데릭말": "frederic malle", "프레데릭 말": "frederic malle",
+      "아쿠아디파르마": "acqua di parma", "아쿠아 디 파르마": "acqua di parma",
+      "아무아주": "amouage",
+      "세르주루텐": "serge lutens", "세르주 루텐": "serge lutens"
+    };
+
+    let extendedQuery = query;
+    for (const [kor, eng] of Object.entries(korMap)) {
+      if (query.includes(kor)) {
+        extendedQuery += ` ${eng}`;
+      }
+    }
+
     const searchString = `${p.brand} ${p.brandKor || ""} ${p.name} ${p.nameKor || ""} ${p.scentFamily.join(" ")}`.toLowerCase();
-    return searchString.includes(searchCatalogQuery.toLowerCase());
+    
+    // Check if matching any of the split query tokens for maximum accuracy & flexibility
+    const queryTokens = extendedQuery.split(/\s+/).filter(Boolean);
+    return queryTokens.every(token => searchString.includes(token));
   });
 
   const handleQuickAddClick = () => {
@@ -326,17 +381,17 @@ export default function MyWardrobeTab({
                   <p className="text-[10px] text-stone-400 mt-1">이미 모두 추가하셨거나 신제품/비메이저 품목일 수 있습니다.</p>
                 </div>
               ) : (
-                filteredCatalog.map(p => {
+                filteredCatalog.slice(0, 50).map(p => {
                   const displayBrand = p.brandKor ? `${p.brandKor} (${p.brand})` : p.brand;
                   const displayName = p.nameKor ? p.nameKor : p.name;
                   return (
                     <button
-                      key={p.id}
-                      onClick={() => {
-                        onAddPerfume(p);
-                        setSearchCatalogQuery("");
-                      }}
-                      className="w-full text-left flex items-center justify-between p-3.5 rounded-xl bg-brand-bg/25 hover:bg-brand-bg/75 border border-stone-150 hover:border-brand-sub shadow-2xs transition-all duration-200 cursor-pointer group"
+                       key={p.id}
+                       onClick={() => {
+                         onAddPerfume(p);
+                         setSearchCatalogQuery("");
+                       }}
+                       className="w-full text-left flex items-center justify-between p-3.5 rounded-xl bg-brand-bg/25 hover:bg-brand-bg/75 border border-stone-150 hover:border-brand-sub shadow-2xs transition-all duration-200 cursor-pointer group"
                     >
                       <div className="min-w-0 pr-1.5">
                         <span className="text-[8px] text-brand-point block leading-none font-bold uppercase tracking-wider mb-1 truncate">{displayBrand}</span>
@@ -351,6 +406,12 @@ export default function MyWardrobeTab({
                 })
               )}
             </div>
+
+            {filteredCatalog.length > 50 && (
+              <p className="text-[10px] text-stone-500 font-medium text-center italic">
+                * 검색 결과가 너무 많아 상위 50개만 보여주고 있습니다 (총 {filteredCatalog.length}개 검색됨).
+              </p>
+            )}
           </div>
 
           {/* AI Auto-Registration Wizard Card as specified in requirement 3 (Most Important!) */}
