@@ -22,6 +22,7 @@ function getGeminiClient(): GoogleGenAI | null {
       aiClient = new GoogleGenAI({
         apiKey: key,
         httpOptions: {
+          timeout: 60000, // 60 seconds timeout limit for GenAI calls, preventing early timeouts
           headers: {
             'User-Agent': 'aistudio-build',
           }
@@ -399,9 +400,14 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`[ScentWeave Server] running on http://localhost:${PORT} under ${process.env.NODE_ENV || 'development'} mode`);
   });
+
+  // Ensure socket timeouts are relaxed (60 seconds) to accommodate multi-stage real-time AI searches
+  server.timeout = 60000;
+  server.headersTimeout = 65000;
+  server.keepAliveTimeout = 60000;
 }
 
 startServer();

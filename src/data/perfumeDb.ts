@@ -67,6 +67,9 @@ export function addPerfumeToDb(newPerfume: Perfume): boolean {
   return savePerfumes(list);
 }
 
+// Helper delay for backoff between retries
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // AI-based real-time auto-expansion system using Gemini API
 export async function autoExpandPerfumeWithAI(
   ai: GoogleGenAI,
@@ -74,7 +77,7 @@ export async function autoExpandPerfumeWithAI(
   nameInput: string
 ): Promise<Perfume | null> {
   const query = `${brandInput} ${nameInput}`.trim();
-  console.log(`[perfumeDb] Running AI Auto-Expansion Search for: "${query}"`);
+  console.log(`[perfumeDb] Starting AI Auto-Expansion Search for: "${query}"`);
 
   // Prompt requesting Gemini to perform a precise research on the missing perfume
   const prompt = `당신은 전 세계의 고급 니치 향수와 브랜드 신상품을 면밀히 분석하는 전문 어시스턴트 조향사입니다.
@@ -97,88 +100,110 @@ export async function autoExpandPerfumeWithAI(
 
 웹 검색결과를 바탕으로 완벽히 정확한 실제 향수 성분(Notes) 정보를 제공하며, 어물쩍 가짜 값을 꾸며내지 마세요. 만일 완전히 미지의 정체불명 향수라면 가장 유사한 네이밍의 실제 존재하는 브랜드 제품으로 스마트하게 보정하여 완성해 주세요.`;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }], // Enable web search grounding
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            brand: { type: Type.STRING },
-            brandKor: { type: Type.STRING },
-            name: { type: Type.STRING },
-            nameKor: { type: Type.STRING },
-            scentFamily: { type: Type.ARRAY, items: { type: Type.STRING } },
-            topNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
-            middleNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
-            baseNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
-            season: { type: Type.ARRAY, items: { type: Type.STRING } },
-            gender: { type: Type.STRING, description: "Unisex, Men, or Women" },
-            description: { type: Type.STRING }
-          },
-          required: [
-            "brand",
-            "brandKor",
-            "name",
-            "nameKor",
-            "scentFamily",
-            "topNotes",
-            "middleNotes",
-            "baseNotes",
-            "season",
-            "gender",
-            "description"
-          ]
+  const maxAttempts = 3; // 1 Initial attempt + up to 2 auto-retries
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    console.log(`[perfumeDb] [Attempt ${attempt}/${maxAttempts}] Processing AI search for: "${query}"`);
+    
+    try {
+      // Stage 1: Initiating Gemini API Web Grounding Search
+      console.log(`[perfumeDb] [Stage 1 - Call Gemini API with Web Search] Submitting query ground-search: "${query}"`);
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }], // Enable web search grounding
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              brand: { type: Type.STRING },
+              brandKor: { type: Type.STRING },
+              name: { type: Type.STRING },
+              nameKor: { type: Type.STRING },
+              scentFamily: { type: Type.ARRAY, items: { type: Type.STRING } },
+              topNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
+              middleNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
+              baseNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
+              season: { type: Type.ARRAY, items: { type: Type.STRING } },
+              gender: { type: Type.STRING, description: "Unisex, Men, or Women" },
+              description: { type: Type.STRING }
+            },
+            required: [
+              "brand",
+              "brandKor",
+              "name",
+              "nameKor",
+              "scentFamily",
+              "topNotes",
+              "middleNotes",
+              "baseNotes",
+              "season",
+              "gender",
+              "description"
+            ]
+          }
+        }
+      });
+
+      // Stage 2: Processing and validating text returned
+      console.log(`[perfumeDb] [Stage 2 - Response Received] Awaiting text conversion...`);
+      const text = response.text;
+      if (!text) {
+        throw new Error("No response string returned from Gemini LLM");
+      }
+
+      console.log(`[perfumeDb] [Stage 3 - Parse JSON Schema] Parsing JSON response payload...`);
+      const cleanJson = JSON.parse(text);
+
+      // Stage 3: Validation and formulation
+      console.log(`[perfumeDb] [Stage 4 - Validate Structured Data] Formulating perfume record for: ${cleanJson.brand} - ${cleanJson.name}`);
+      const newPerfumeId = `perfume_${Date.now()}`;
+      const newPerfume: Perfume = {
+        id: newPerfumeId,
+        brand: cleanJson.brand || brandInput,
+        brandKor: cleanJson.brandKor || "미상 코스메틱",
+        name: cleanJson.name || nameInput,
+        nameKor: cleanJson.nameKor || nameInput,
+        scentFamily: cleanJson.scentFamily && cleanJson.scentFamily.length > 0 ? cleanJson.scentFamily : ["Fresh"],
+        topNotes: cleanJson.topNotes || ["Unknown Top"],
+        middleNotes: cleanJson.middleNotes || ["Unknown Middle"],
+        baseNotes: cleanJson.baseNotes || ["Unknown Base"],
+        season: cleanJson.season || ["봄", "여름", "가을", "겨울"],
+        gender: cleanJson.gender || "Unisex",
+        description: cleanJson.description || "실시간 분석으로 추가된 감각적인 조향 컬렉션 품목."
+      };
+
+      // Stage 4: Insertion to the JSON database
+      console.log(`[perfumeDb] [Stage 5 - Save and Flush to Database file] Storing new perfume record in JSON db...`);
+      const added = addPerfumeToDb(newPerfume);
+      if (added) {
+        console.log(`[perfumeDb] Successfully registered new perfume: [${newPerfume.id}] ${newPerfume.brand} - ${newPerfume.name}`);
+        return newPerfume;
+      } else {
+        // It might already exist in memory under different casing or ID, retrieve and return it
+        const existing = getPerfumesList().find(
+          (p) =>
+            (p.brand.toLowerCase() === newPerfume.brand.toLowerCase() &&
+              p.name.toLowerCase() === newPerfume.name.toLowerCase())
+        );
+        if (existing) {
+          console.log(`[perfumeDb] Duplicate check match found. Returning existing entry instead.`);
+          return existing;
         }
       }
-    });
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("No response string returned from Gemini");
-    }
-
-    const cleanJson = JSON.parse(text);
-
-    // Formulate a proper Perfume object
-    const newPerfumeId = `perfume_${Date.now()}`;
-    const newPerfume: Perfume = {
-      id: newPerfumeId,
-      brand: cleanJson.brand || brandInput,
-      brandKor: cleanJson.brandKor || "미상 코스메틱",
-      name: cleanJson.name || nameInput,
-      nameKor: cleanJson.nameKor || nameInput,
-      scentFamily: cleanJson.scentFamily && cleanJson.scentFamily.length > 0 ? cleanJson.scentFamily : ["Fresh"],
-      topNotes: cleanJson.topNotes || ["Unknown Top"],
-      middleNotes: cleanJson.middleNotes || ["Unknown Middle"],
-      baseNotes: cleanJson.baseNotes || ["Unknown Base"],
-      season: cleanJson.season || ["봄", "여름", "가을", "겨울"],
-      gender: cleanJson.gender || "Unisex",
-      description: cleanJson.description || "실시간 분석으로 추가된 감각적인 조향 컬렉션 품목."
-    };
-
-    // Save back to DB
-    const added = addPerfumeToDb(newPerfume);
-    if (added) {
-      console.log(`[perfumeDb] Successfully registered new perfume: [${newPerfume.id}] ${newPerfume.brand} - ${newPerfume.name}`);
       return newPerfume;
-    } else {
-      // It might already exist in memory under different casing or ID, retrieve and return it
-      const existing = getPerfumesList().find(
-        (p) =>
-          (p.brand.toLowerCase() === newPerfume.brand.toLowerCase() &&
-            p.name.toLowerCase() === newPerfume.name.toLowerCase())
-      );
-      if (existing) {
-        return existing;
+    } catch (error: any) {
+      console.error(`[perfumeDb] [Attempt ${attempt}/${maxAttempts} Failed] Error:`, error.message || error);
+      
+      if (attempt < maxAttempts) {
+        const cooldown = 1500;
+        console.warn(`[perfumeDb] Waiting ${cooldown}ms before active automatic retry...`);
+        await delay(cooldown);
+      } else {
+        console.error(`[perfumeDb] All ${maxAttempts} attempts for real-time search failed.`);
       }
     }
-    return newPerfume;
-  } catch (error) {
-    console.error("[perfumeDb] Error generating or inserting unregistered perfume:", error);
-    return null;
   }
+
+  return null;
 }

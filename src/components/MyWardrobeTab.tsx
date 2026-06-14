@@ -44,6 +44,7 @@ export default function MyWardrobeTab({
   const [aiName, setAiName] = useState("");
   const [aiError, setAiError] = useState("");
   const [aiSuccessMessage, setAiSuccessMessage] = useState("");
+  const [aiStatusText, setAiStatusText] = useState("");
 
   // Filter Catalog using the state-driven dynamically populated catalog
   const filteredCatalog = catalog.filter(p => {
@@ -71,7 +72,26 @@ export default function MyWardrobeTab({
     setAiError("");
     setAiSuccessMessage("");
 
+    const inputName = aiName.trim();
+    const inputBrand = aiBrand.trim();
+    const initialText = `AI가 전 세계 향수 도감에서 '${inputBrand ? inputBrand + " " : ""}${inputName}'의 노트를 분석하고 있습니다... (약 5~10초 소요)`;
+    setAiStatusText(initialText);
+
+    // Dynamic progressive logs rotating every 3.2 seconds
+    const textInterval = setInterval(() => {
+      setAiStatusText((prev) => {
+        if (prev.includes("도감에서")) {
+          return "글로벌 향수 아카이브에서 공식 성분(Top, Middle, Base Notes) 정보를 심층 탐색 중입니다...";
+        } else if (prev.includes("아카이브에서")) {
+          return "수집된 노트를 조합하여 고유 향조 매트릭스 및 설명글을 빌드하여 마스터 DB에 등록 중입니다...";
+        } else {
+          return "AI 심층 탐색 및 DB 색인 작업이 거의 마무리 단계입니다. 조금만 더 대기해 주세요...";
+        }
+      });
+    }, 3200);
+
     try {
+      console.log(`[MyWardrobeTab] Dispatching AI real-time search for Brand: "${inputBrand}", Name: "${inputName}"`);
       const res = await fetch("/api/perfumes/search-or-create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,8 +101,10 @@ export default function MyWardrobeTab({
         }),
       });
 
+      clearInterval(textInterval);
+
       if (!res.ok) {
-        throw new Error("서버 연동에 실패했습니다.");
+        throw new Error("서버 연동에 실패했거나 응답이 일연 및 지연되고 있습니다.");
       }
 
       const data = await res.json();
@@ -106,10 +128,12 @@ export default function MyWardrobeTab({
         setAiError("추가 과정에서 수집된 향 정보를 가져오지 못했습니다. 다시 시도해 주세요.");
       }
     } catch (err: any) {
-      console.error(err);
+      clearInterval(textInterval);
+      console.error("[MyWardrobeTab] Error on registering perfume through AI:", err);
       setAiError("실시간 AI 수집 중 타임아웃 또는 서버 에러가 발생했습니다. 잠시 후 재시도해 주세요.");
     } finally {
       setLoadingAi(false);
+      setAiStatusText("");
     }
   };
 
@@ -327,25 +351,30 @@ export default function MyWardrobeTab({
               <button
                 type="submit"
                 disabled={loadingAi || !aiName.trim()}
-                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5 ${
+                className={`w-full py-3 px-4 rounded-xl text-xs font-bold text-white transition-all flex flex-col items-center justify-center gap-2 ${
                   loadingAi 
-                    ? "bg-stone-400 cursor-not-allowed" 
+                    ? "bg-stone-500 cursor-not-allowed border border-stone-400" 
                     : "bg-[#2D4A3E] hover:bg-[#1E332A] cursor-pointer"
                 }`}
               >
                 {loadingAi ? (
-                  <>
-                    <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>AI 웹 검색 수집 및 DB 자동 등록 중...</span>
-                  </>
+                  <div className="flex flex-col items-center gap-1.5 w-full">
+                    <div className="flex items-center gap-2">
+                      <svg className="animate-spin h-3.5 w-3.5 text-white shrink-0" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span className="font-bold">실시간 향수 수집 및 분석 정보 등록 중</span>
+                    </div>
+                    <p className="text-[10px] md:text-[11px] text-white/90 font-medium font-sans text-center leading-relaxed bg-[#1E332A]/45 py-1.5 px-3 rounded-lg border border-white/5 w-full max-w-md">
+                      {aiStatusText}
+                    </p>
+                  </div>
                 ) : (
-                  <>
+                  <div className="flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>실시간 향수 자동 확장 및 내 컬렉션 담기</span>
-                  </>
+                  </div>
                 )}
               </button>
             </form>
