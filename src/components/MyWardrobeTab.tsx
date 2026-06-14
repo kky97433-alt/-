@@ -29,6 +29,20 @@ const PerfumeBottleIcon = ({ color = "#2D4A3E" }: { color?: string }) => (
   </svg>
 );
 
+const BRANDS = [
+  "전체",
+  "CHANEL",
+  "DIPTYQUE",
+  "BYREDO",
+  "AESOP",
+  "LE LABO",
+  "JO MALONE",
+  "CREED",
+  "TOM FORD",
+  "MAISON MARGIELA",
+  "PENHALIGONS"
+];
+
 export default function MyWardrobeTab({
   myPerfumes,
   catalog,
@@ -36,6 +50,7 @@ export default function MyWardrobeTab({
   onRemovePerfume,
   onRefreshCatalog
 }: MyWardrobeTabProps) {
+  const [selectedBrand, setSelectedBrand] = useState("전체");
   const [searchCatalogQuery, setSearchCatalogQuery] = useState("");
 
   // AI Auto-Registration States
@@ -49,8 +64,28 @@ export default function MyWardrobeTab({
   // Filter Catalog using the state-driven dynamically populated catalog
   const filteredCatalog = catalog.filter(p => {
     const isAlreadyOwned = myPerfumes.some(owned => owned.id === p.id);
+    if (isAlreadyOwned) return false;
+
+    // Brand Filter check
+    if (selectedBrand !== "전체") {
+      let match = false;
+      const normalize = (str: string) => str.toLowerCase().replace(/[\s']/g, "");
+      const brandNormal = normalize(p.brand);
+
+      if (selectedBrand === "PENHALIGONS" && brandNormal.includes("penhaligon")) {
+        match = true;
+      } else if (selectedBrand === "JO MALONE" && brandNormal.includes("jomalone")) {
+        match = true;
+      } else if (selectedBrand === "MAISON MARGIELA" && brandNormal.includes("margiela")) {
+        match = true;
+      } else if (brandNormal === normalize(selectedBrand)) {
+        match = true;
+      }
+      if (!match) return false;
+    }
+
     const searchString = `${p.brand} ${p.brandKor || ""} ${p.name} ${p.nameKor || ""} ${p.scentFamily.join(" ")}`.toLowerCase();
-    return !isAlreadyOwned && searchString.includes(searchCatalogQuery.toLowerCase());
+    return searchString.includes(searchCatalogQuery.toLowerCase());
   });
 
   const handleQuickAddClick = () => {
@@ -258,6 +293,30 @@ export default function MyWardrobeTab({
                 placeholder="브랜드 또는 향수 명칭 검색..."
                 className="w-full bg-brand-bg/50 border border-stone-200 rounded-xl pl-10 pr-3.5 py-3 text-stone-850 text-xs focus:outline-none focus:border-brand-point focus:bg-white transition-all font-sans"
               />
+            </div>
+
+            {/* Brand Filter Chips container with elegant horizontal scroll */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] font-bold tracking-wider text-brand-sub uppercase block">브랜드 필터 Quick Select</span>
+              <div className="flex gap-1.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-none -mx-2 px-2">
+                {BRANDS.map(brand => {
+                  const isActive = selectedBrand === brand;
+                  return (
+                    <button
+                      key={brand}
+                      type="button"
+                      onClick={() => setSelectedBrand(brand)}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-bold tracking-wide border transition-all duration-200 whitespace-nowrap cursor-pointer hover:scale-[1.03] ${
+                        isActive
+                          ? "bg-brand-point text-white border-brand-point shadow-sm font-semibold"
+                          : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100/80 hover:text-stone-800"
+                      }`}
+                    >
+                      {brand === "전체" ? "전체" : brand}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">

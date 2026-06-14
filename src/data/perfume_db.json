@@ -1146,5 +1146,33 @@
     "season": ["봄", "여름"],
     "gender": "Unisex",
     "description": "새벽녘 달빛을 듬뿍 머금은 지중해 오렌지 숲, 서늘하고 맑은 주니퍼 베리와 은은한 장미 목로 조화."
+  },
+  {
+    "id": "perfume_83",
+    "brand": "Penhaligon's",
+    "brandKor": "펜할리곤스",
+    "name": "Juniper Sling",
+    "nameKor": "주니퍼 슬링",
+    "scentFamily": ["Aromatic", "Fresh Spicy", "Woody"],
+    "topNotes": ["Juniper Berries", "Cinnamon", "Orange", "Angelica"],
+    "middleNotes": ["Cardamom", "Pepper", "Leather", "Orris Root"],
+    "baseNotes": ["Vetiver", "Brown Sugar", "Black Cherry", "Amber"],
+    "season": ["봄", "여름", "가을", "겨울"],
+    "gender": "Unisex",
+    "description": "드라이 진의 청량함과 세련된 스파이시 우드의 잔상이 조화로운 아로마틱 칵테일 센트."
+  },
+  {
+    "id": "perfume_84",
+    "brand": "Penhaligon's",
+    "brandKor": "펜할리곤스",
+    "name": "Endymion",
+    "nameKor": "앤디미온",
+    "scentFamily": ["Amber", "Spicy", "Lavender", "Fresh"],
+    "topNotes": ["Lavender", "Bergamot", "Sage", "Mandarin Orange"],
+    "middleNotes": ["Coffee", "Geranium"],
+    "baseNotes": ["Sandalwood", "Leather", "Myrrh", "Musk", "Incense", "Nutmeg", "Cardamom"],
+    "season": ["봄", "가을", "겨울"],
+    "gender": "Men",
+    "description": "달을 사랑한 그리스 영웅 앤디미온 신화의 감성, 달콤포근한 라벤더 커피 우디 퓨전의 정수."
   }
 ]
